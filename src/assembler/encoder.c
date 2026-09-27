@@ -16,6 +16,32 @@ static int parse_shift_amount(Assembler* a, const char* operand, int line_num) {
     return (int)value;
 }
 
+static int parse_bounded_imm(Assembler* a, const char* operand, int line_num,
+                             long min, long max, int alignment, int32_t* result) {
+    char* end = NULL;
+    errno = 0;
+    long value = strtol(operand, &end, 0);
+    if (errno == ERANGE || end == operand || *end != '\0' ||
+        value < min || value > max || value % alignment != 0) {
+        fprintf(stderr, "  [ERR] Satir %d: Gecersiz veya aralik disi immediate '%s'\n",
+                line_num, operand);
+        a->error_count++;
+        return 0;
+    }
+    *result = (int32_t)(uint32_t)value;
+    return 1;
+}
+
+static int validate_imm_value(Assembler* a, int32_t value, int line_num,
+                              long min, long max, int alignment) {
+    if (value < min || value > max || value % alignment != 0) {
+        fprintf(stderr, "  [ERR] Satir %d: Gecersiz veya aralik disi immediate\n", line_num);
+        a->error_count++;
+        return 0;
+    }
+    return 1;
+}
+
 uint32_t enc_R(int f7, int rs2, int rs1, int f3, int rd, int op) {
     return (((uint32_t)f7&0x7F)<<25)|(((uint32_t)rs2&0x1F)<<20)|(((uint32_t)rs1&0x1F)<<15)|
            (((uint32_t)f3&0x7)<<12)|(((uint32_t)rd&0x1F)<<7)|(op&0x7F);
@@ -194,13 +220,17 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
         int rd=RD, rs1=RS1; int is_l; char lbl[MAX_NAME_LEN]={0};
         int32_t imm = parse_imm_or_label(args[2], lbl, &is_l);
         if (is_l) { add_reloc(a,off,"text",RELOC_LO12,lbl,0); imm=0; }
+        else if (!parse_bounded_imm(a,args[2],line_num,-2048,2047,1,&imm)) return;
         emit_word(a, enc_I(imm,rs1,0,rd,0x13));
     }
-    else if (strcmp(mn,"slti")==0)  { int rd=RD,rs1=RS1; emit_word(a,enc_I((int)strtol(args[2],NULL,0),rs1,2,rd,0x13)); }
-    else if (strcmp(mn,"sltiu")==0) { int rd=RD,rs1=RS1; emit_word(a,enc_I((int)strtol(args[2],NULL,0),rs1,3,rd,0x13)); }
-    else if (strcmp(mn,"xori")==0)  { int rd=RD,rs1=RS1; emit_word(a,enc_I((int)strtol(args[2],NULL,0),rs1,4,rd,0x13)); }
-    else if (strcmp(mn,"ori")==0)   { int rd=RD,rs1=RS1; emit_word(a,enc_I((int)strtol(args[2],NULL,0),rs1,6,rd,0x13)); }
-    else if (strcmp(mn,"andi")==0)  { int rd=RD,rs1=RS1; emit_word(a,enc_I((int)strtol(args[2],NULL,0),rs1,7,rd,0x13)); }
+    else if (strcmp(mn,"slti")==0 || strcmp(mn,"sltiu")==0 || strcmp(mn,"xori")==0 ||
+             strcmp(mn,"ori")==0 || strcmp(mn,"andi")==0) {
+        int rd=RD, rs1=RS1, f3=strcmp(mn,"slti")==0?2:strcmp(mn,"sltiu")==0?3:
+                              strcmp(mn,"xori")==0?4:strcmp(mn,"ori")==0?6:7;
+        int32_t imm;
+        if (!parse_bounded_imm(a,args[2],line_num,-2048,2047,1,&imm)) return;
+        emit_word(a,enc_I(imm,rs1,f3,rd,0x13));
+    }
     else if (strcmp(mn,"slli")==0)  { int rd=RD,rs1=RS1,sh=parse_shift_amount(a,args[2],line_num); emit_word(a,enc_R(0,sh,rs1,1,rd,0x13)); }
     else if (strcmp(mn,"srli")==0)  { int rd=RD,rs1=RS1,sh=parse_shift_amount(a,args[2],line_num); emit_word(a,enc_R(0,sh,rs1,5,rd,0x13)); }
     else if (strcmp(mn,"srai")==0)  { int rd=RD,rs1=RS1,sh=parse_shift_amount(a,args[2],line_num); emit_word(a,enc_R(0x20,sh,rs1,5,rd,0x13)); }
@@ -210,6 +240,7 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
              strcmp(mn,"lhu")==0||strcmp(mn,"lbu")==0) {
         int rd=RD; int32_t imm; int rs1;
         if (parse_mem_operand(args[1], &imm, &rs1) < 0) { a->error_count++; return; }
+        if (!validate_imm_value(a,imm,line_num,-2048,2047,1)) return;
         int f3 = strcmp(mn,"lw")==0?2:strcmp(mn,"lh")==0?1:strcmp(mn,"lb")==0?0:
                  strcmp(mn,"lhu")==0?5:4;
         emit_word(a, enc_I(imm,rs1,f3,rd,0x03));
@@ -218,6 +249,7 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
     else if (strcmp(mn,"sw")==0||strcmp(mn,"sh")==0||strcmp(mn,"sb")==0) {
         int rs2=RD; /* args[0] kaynak reg */ int32_t imm; int rs1;
         if (parse_mem_operand(args[1], &imm, &rs1) < 0) { a->error_count++; return; }
+        if (!validate_imm_value(a,imm,line_num,-2048,2047,1)) return;
         int f3 = strcmp(mn,"sw")==0?2:strcmp(mn,"sh")==0?1:0;
         emit_word(a, enc_S(imm,rs2,rs1,f3,0x23));
     }
@@ -230,6 +262,7 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
         int is_l; char lbl[MAX_NAME_LEN]={0};
         int32_t imm = parse_imm_or_label(args[2], lbl, &is_l);
         if (is_l) { add_reloc(a,off,"text",RELOC_BRANCH,lbl,0); imm=0; }
+        else if (!parse_bounded_imm(a,args[2],line_num,-4096,4094,2,&imm)) return;
         emit_word(a, enc_B(imm,rs2,rs1,f3,0x63));
     }
     /* ---------- LUI / AUIPC ---------- */
@@ -237,14 +270,20 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
         int rd=RD; int is_l; char lbl[MAX_NAME_LEN]={0};
         int32_t imm = parse_imm_or_label(args[1], lbl, &is_l);
         if (is_l) { add_reloc(a,off,"text",RELOC_HI20,lbl,0); imm=0; }
-        else imm = imm << 12;
+        else {
+            if (!parse_bounded_imm(a,args[1],line_num,-524288,1048575,1,&imm)) return;
+            imm = (int32_t)((uint32_t)imm << 12);
+        }
         emit_word(a, enc_U(imm,rd,0x37));
     }
     else if (strcmp(mn,"auipc")==0) {
         int rd=RD; int is_l; char lbl[MAX_NAME_LEN]={0};
         int32_t imm = parse_imm_or_label(args[1], lbl, &is_l);
         if (is_l) { add_reloc(a,off,"text",RELOC_PCREL_HI20,lbl,0); imm=0; }
-        else imm = imm << 12;
+        else {
+            if (!parse_bounded_imm(a,args[1],line_num,-524288,1048575,1,&imm)) return;
+            imm = (int32_t)((uint32_t)imm << 12);
+        }
         emit_word(a, enc_U(imm,rd,0x17));
     }
     /* ---------- JAL / JALR ---------- */
@@ -252,11 +291,13 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
         int rd=RD; int is_l; char lbl[MAX_NAME_LEN]={0};
         int32_t imm = parse_imm_or_label(args[1], lbl, &is_l);
         if (is_l) { add_reloc(a,off,"text",RELOC_JAL,lbl,0); imm=0; }
+        else if (!parse_bounded_imm(a,args[1],line_num,-1048576,1048574,2,&imm)) return;
         emit_word(a, enc_J(imm,rd,0x6F));
     }
     else if (strcmp(mn,"jalr")==0) {
         int rd=RD, rs1=RS1;
-        int32_t imm = argc>2 ? (int32_t)strtol(args[2],NULL,0) : 0;
+        int32_t imm = 0;
+        if (argc > 2 && !parse_bounded_imm(a,args[2],line_num,-2048,2047,1,&imm)) return;
         emit_word(a, enc_I(imm,rs1,0,rd,0x67));
     }
     /* ---------- SYSTEM ---------- */
@@ -277,6 +318,7 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
         int is_l; char lbl[MAX_NAME_LEN]={0};
         int32_t imm = parse_imm_or_label(args[0], lbl, &is_l);
         if (is_l) { add_reloc(a,off,"text",RELOC_JAL,lbl,0); imm=0; }
+        else if (!parse_bounded_imm(a,args[0],line_num,-1048576,1048574,2,&imm)) return;
         emit_word(a, enc_J(imm,0,0x6F));
     }
     else if (strcmp(mn,"li")==0) {
@@ -287,6 +329,7 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
             emit_word(a, enc_U(0,rd,0x37));
             emit_word(a, enc_I(0,rd,0,rd,0x13));
         } else {
+            if (!parse_bounded_imm(a,args[1],line_num,INT32_MIN,UINT32_MAX,1,&imm)) return;
             if (imm >= -2048 && imm <= 2047) {
                 emit_word(a, enc_I(imm,0,0,rd,0x13));
             } else {
@@ -315,36 +358,42 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
         int rs1=RD; int is_l; char lbl[MAX_NAME_LEN]={0};
         int32_t imm = parse_imm_or_label(args[1],lbl,&is_l);
         if (is_l) { add_reloc(a,off,"text",RELOC_BRANCH,lbl,0); imm=0; }
+        else if (!parse_bounded_imm(a,args[1],line_num,-4096,4094,2,&imm)) return;
         emit_word(a,enc_B(imm,0,rs1,0,0x63));
     }
     else if (strcmp(mn,"bnez")==0) {
         int rs1=RD; int is_l; char lbl[MAX_NAME_LEN]={0};
         int32_t imm = parse_imm_or_label(args[1],lbl,&is_l);
         if (is_l) { add_reloc(a,off,"text",RELOC_BRANCH,lbl,0); imm=0; }
+        else if (!parse_bounded_imm(a,args[1],line_num,-4096,4094,2,&imm)) return;
         emit_word(a,enc_B(imm,0,rs1,1,0x63));
     }
     else if (strcmp(mn,"blez")==0) {
         int rs1=RD; int is_l; char lbl[MAX_NAME_LEN]={0};
         int32_t imm = parse_imm_or_label(args[1],lbl,&is_l);
         if (is_l) { add_reloc(a,off,"text",RELOC_BRANCH,lbl,0); imm=0; }
+        else if (!parse_bounded_imm(a,args[1],line_num,-4096,4094,2,&imm)) return;
         emit_word(a,enc_B(imm,rs1,0,5,0x63));
     }
     else if (strcmp(mn,"bgez")==0) {
         int rs1=RD; int is_l; char lbl[MAX_NAME_LEN]={0};
         int32_t imm = parse_imm_or_label(args[1],lbl,&is_l);
         if (is_l) { add_reloc(a,off,"text",RELOC_BRANCH,lbl,0); imm=0; }
+        else if (!parse_bounded_imm(a,args[1],line_num,-4096,4094,2,&imm)) return;
         emit_word(a,enc_B(imm,0,rs1,5,0x63));
     }
     else if (strcmp(mn,"bltz")==0) {
         int rs1=RD; int is_l; char lbl[MAX_NAME_LEN]={0};
         int32_t imm = parse_imm_or_label(args[1],lbl,&is_l);
         if (is_l) { add_reloc(a,off,"text",RELOC_BRANCH,lbl,0); imm=0; }
+        else if (!parse_bounded_imm(a,args[1],line_num,-4096,4094,2,&imm)) return;
         emit_word(a,enc_B(imm,0,rs1,4,0x63));
     }
     else if (strcmp(mn,"bgtz")==0) {
         int rs1=RD; int is_l; char lbl[MAX_NAME_LEN]={0};
         int32_t imm = parse_imm_or_label(args[1],lbl,&is_l);
         if (is_l) { add_reloc(a,off,"text",RELOC_BRANCH,lbl,0); imm=0; }
+        else if (!parse_bounded_imm(a,args[1],line_num,-4096,4094,2,&imm)) return;
         emit_word(a,enc_B(imm,rs1,0,4,0x63));
     }
     else {

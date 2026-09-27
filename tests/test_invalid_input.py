@@ -73,6 +73,35 @@ class InvalidInputTests(unittest.TestCase):
                 self.assertIn(b"[ERR]", result.stderr)
                 self.assertFalse(source.with_suffix(".o").exists())
 
+    def test_out_of_range_immediates_fail_instead_of_truncating(self):
+        for instruction in [
+            "addi x1,x2,2048",
+            "slti x1,x2,-2049",
+            "lw x1,2048(x2)",
+            "beq x1,x2,3",
+            "jal x1,1048576",
+            "lui x1,1048576",
+            "li x1,4294967296",
+        ]:
+            with self.subTest(instruction=instruction), tempfile.TemporaryDirectory() as directory:
+                source = pathlib.Path(directory) / "program.s"
+                source.write_text(instruction + "\n")
+                result = subprocess.run([str(ASSEMBLER), str(source)], capture_output=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(b"[ERR]", result.stderr)
+                self.assertFalse(source.with_suffix(".o").exists())
+
+    def test_immediate_boundaries_are_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = pathlib.Path(directory) / "program.s"
+            source.write_text(
+                "addi x1,x2,-2048\nlw x3,2047(x4)\nbeq x1,x2,4094\n"
+                "jal x1,-1048576\nlui x5,-524288\nli x6,0xffffffff\n"
+            )
+            result = subprocess.run([str(ASSEMBLER), str(source)], capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertTrue(source.with_suffix(".o").exists())
+
     def test_output_open_failure_is_not_success(self):
         with tempfile.TemporaryDirectory() as directory:
             source = pathlib.Path(directory) / "program.s"
