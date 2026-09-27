@@ -27,6 +27,7 @@ int asm_assemble_file(Assembler* a, const char* path) {
 
     first_pass(a, lines, lc);
     second_pass(a, lines, lc);
+    if (a->error_count) return -1;
     resolve_local_relocs(a);
 
     printf("  .text : %d byte (%d komut)\n", a->obj.text_count*4, a->obj.text_count);
@@ -47,11 +48,12 @@ int main(int argc, char* argv[]) {
     printf("  RV32I Assembler v1.0 (PicoRV32)\n");
     printf("========================================\n\n");
 
+    int failed = 0;
     for (int i = 1; i < argc; i++) {
         Assembler asm_state;
         asm_init(&asm_state, argv[i]);
 
-        if (asm_assemble_file(&asm_state, argv[i]) != 0) continue;
+        if (asm_assemble_file(&asm_state, argv[i]) != 0) { failed = 1; continue; }
 
         /* global bayraklarini sembollere yansit */
         for (int j = 0; j < asm_state.obj.sym_count; j++) {
@@ -71,6 +73,7 @@ int main(int argc, char* argv[]) {
             strcat(out_path, ".o");
         } else {
             fprintf(stderr, "[ERR] Cikti dosya yolu cok uzun: %s\n", argv[i]);
+            failed = 1;
             continue;
         }
 
@@ -79,5 +82,5 @@ int main(int argc, char* argv[]) {
     }
 
     printf("Assembler tamamlandi.\n");
-    return 0;
+    return failed ? 1 : 0;
 }

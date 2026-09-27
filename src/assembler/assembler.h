@@ -93,6 +93,7 @@ typedef struct {
     /* first-pass label tablosu */
     Symbol     labels[MAX_LABELS];
     int        label_count;
+    int        error_count;
 } Assembler;
 
 /* Fonksiyon bildirimleri */

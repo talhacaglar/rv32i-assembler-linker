@@ -34,7 +34,7 @@ uint32_t enc_J(int imm, int rd, int op) {
 
 void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) {
     /* args dizisini ayır */
-    char args[6][MAX_NAME_LEN];
+    char args[6][MAX_NAME_LEN] = {{0}};
     int argc = 0;
     char tmp[MAX_LINE_LEN];
     copy_cstr(tmp, sizeof(tmp), args_str);
@@ -60,6 +60,11 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
             if (j < MAX_NAME_LEN-1) args[argc][j++] = *p;
             p++;
         }
+        if (argc >= 6) {
+            fprintf(stderr, "  [ERR] Satir %d: Cok fazla operand\n", line_num);
+            a->error_count++;
+            return;
+        }
         args[argc][j] = '\0';
         /* trim son arg */
         {
@@ -69,6 +74,80 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
             while (k>=0 && (args[argc][k]==' '||args[argc][k]=='\t')) args[argc][k--]='\0';
         }
         if (args[argc][0]) argc++;
+    }
+
+    /* Validate arity before reading operand slots or generating output. */
+    static const struct { const char* name; int min_args; int max_args; } arities[] = {
+        {"add", 3, 3},
+        {"sub", 3, 3},
+        {"sll", 3, 3},
+        {"slt", 3, 3},
+        {"sltu", 3, 3},
+        {"xor", 3, 3},
+        {"srl", 3, 3},
+        {"sra", 3, 3},
+        {"or", 3, 3},
+        {"and", 3, 3},
+        {"addi", 3, 3},
+        {"slti", 3, 3},
+        {"sltiu", 3, 3},
+        {"xori", 3, 3},
+        {"ori", 3, 3},
+        {"andi", 3, 3},
+        {"slli", 3, 3},
+        {"srli", 3, 3},
+        {"srai", 3, 3},
+        {"beq", 3, 3},
+        {"bne", 3, 3},
+        {"blt", 3, 3},
+        {"bge", 3, 3},
+        {"bltu", 3, 3},
+        {"bgeu", 3, 3},
+        {"lw", 2, 2},
+        {"lh", 2, 2},
+        {"lb", 2, 2},
+        {"lhu", 2, 2},
+        {"lbu", 2, 2},
+        {"sw", 2, 2},
+        {"sh", 2, 2},
+        {"sb", 2, 2},
+        {"lui", 2, 2},
+        {"auipc", 2, 2},
+        {"jal", 2, 2},
+        {"mv", 2, 2},
+        {"not", 2, 2},
+        {"neg", 2, 2},
+        {"seqz", 2, 2},
+        {"snez", 2, 2},
+        {"li", 2, 2},
+        {"la", 2, 2},
+        {"beqz", 2, 2},
+        {"bnez", 2, 2},
+        {"blez", 2, 2},
+        {"bgez", 2, 2},
+        {"j", 1, 1},
+        {"call", 1, 1},
+        {"ecall", 0, 0},
+        {"ebreak", 0, 0},
+        {"nop", 0, 0},
+        {"ret", 0, 0},
+        {"jalr", 2, 3}, {"fence", 0, 2}
+    };
+    int known = 0;
+    for (size_t i = 0; i < sizeof(arities) / sizeof(arities[0]); i++) {
+        if (strcmp(mn, arities[i].name) != 0) continue;
+        known = 1;
+        if (argc < arities[i].min_args || argc > arities[i].max_args) {
+            fprintf(stderr, "  [ERR] Satir %d: Hatali operand sayisi: %s\n", line_num, mn);
+            a->error_count++;
+            return;
+        }
+        break;
+    }
+    if (!known) {
+        fprintf(stderr, "  [ERR] Satir %d: Bilinmeyen komut '%s'\n", line_num, mn);
+        a->error_count++;
+        return;
     }
 
     uint32_t off = (uint32_t)a->text_offset;
