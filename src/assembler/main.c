@@ -65,8 +65,17 @@ int main(int argc, char* argv[]) {
 
         /* .o dosyasini yaz */
         char out_path[300];
+        if (strlen(argv[i]) >= sizeof(out_path) - 2) {
+            fprintf(stderr, "[ERR] Cikti dosya yolu cok uzun: %s\n", argv[i]);
+            failed = 1;
+            continue;
+        }
         copy_cstr(out_path, sizeof(out_path), argv[i]);
-        char* dot = strrchr(out_path, '.');
+        char* basename = strrchr(out_path, '/');
+        char* backslash = strrchr(out_path, '\\');
+        if (backslash && (!basename || backslash > basename)) basename = backslash;
+        basename = basename ? basename + 1 : out_path;
+        char* dot = strrchr(basename, '.');
         if (dot) {
             copy_cstr(dot, sizeof(out_path) - (size_t)(dot - out_path), ".o");
         } else if (strlen(out_path) + 2 < sizeof(out_path)) {

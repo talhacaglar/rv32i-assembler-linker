@@ -69,3 +69,14 @@ class InvalidInputTests(unittest.TestCase):
             result = subprocess.run([str(ASSEMBLER), str(source)], capture_output=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(b"[ERR]", result.stderr)
+
+    def test_dots_in_parent_directory_do_not_change_object_location(self):
+        with tempfile.TemporaryDirectory() as directory:
+            parent = pathlib.Path(directory) / "directory.with.dots"
+            parent.mkdir()
+            source = parent / "program"
+            source.write_text("nop\n")
+            result = subprocess.run([str(ASSEMBLER), str(source)], capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertTrue((parent / "program.o").exists())
+            self.assertFalse((pathlib.Path(directory) / "directory.with.o").exists())
