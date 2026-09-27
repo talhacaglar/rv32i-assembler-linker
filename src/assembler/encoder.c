@@ -32,6 +32,12 @@ uint32_t enc_J(int imm, int rd, int op) {
 }
 
 
+static int checked_reg(Assembler* a, const char* operand) {
+    int reg = parse_reg(operand);
+    if (reg < 0) a->error_count++;
+    return reg;
+}
+
 void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) {
     /* args dizisini ayır */
     char args[6][MAX_NAME_LEN] = {{0}};
@@ -154,9 +160,9 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
 
     uint32_t off = (uint32_t)a->text_offset;
 
-#define RD  (argc>0 ? parse_reg(args[0]) : 0)
-#define RS1 (argc>1 ? parse_reg(args[1]) : 0)
-#define RS2 (argc>2 ? parse_reg(args[2]) : 0)
+#define RD  (argc>0 ? checked_reg(a, args[0]) : 0)
+#define RS1 (argc>1 ? checked_reg(a, args[1]) : 0)
+#define RS2 (argc>2 ? checked_reg(a, args[2]) : 0)
 
     /* ---------- R-TYPE ---------- */
     if      (strcmp(mn,"add")==0)  emit_word(a, enc_R(0,RS2,RS1,0,RD,0x33));
@@ -191,6 +197,7 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
              strcmp(mn,"lhu")==0||strcmp(mn,"lbu")==0) {
         int rd=RD; int32_t imm; int rs1;
         parse_mem_operand(args[1], &imm, &rs1);
+        if (rs1 < 0) a->error_count++;
         int f3 = strcmp(mn,"lw")==0?2:strcmp(mn,"lh")==0?1:strcmp(mn,"lb")==0?0:
                  strcmp(mn,"lhu")==0?5:4;
         emit_word(a, enc_I(imm,rs1,f3,rd,0x03));
@@ -199,6 +206,7 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
     else if (strcmp(mn,"sw")==0||strcmp(mn,"sh")==0||strcmp(mn,"sb")==0) {
         int rs2=RD; /* args[0] kaynak reg */ int32_t imm; int rs1;
         parse_mem_operand(args[1], &imm, &rs1);
+        if (rs1 < 0) a->error_count++;
         int f3 = strcmp(mn,"sw")==0?2:strcmp(mn,"sh")==0?1:0;
         emit_word(a, enc_S(imm,rs2,rs1,f3,0x23));
     }
