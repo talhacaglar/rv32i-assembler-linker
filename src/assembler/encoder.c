@@ -2,6 +2,19 @@
 #include "encoder.h"
 #include "parser.h"
 #include "../common/utils.h"
+#include <errno.h>
+
+static int parse_shift_amount(Assembler* a, const char* operand, int line_num) {
+    char* end = NULL;
+    errno = 0;
+    long value = strtol(operand, &end, 0);
+    if (errno == ERANGE || end == operand || *end != '\0' || value < 0 || value > 31) {
+        fprintf(stderr, "  [ERR] Satir %d: Kaydirma miktari 0 ile 31 arasinda olmali\n", line_num);
+        a->error_count++;
+        return 0;
+    }
+    return (int)value;
+}
 
 uint32_t enc_R(int f7, int rs2, int rs1, int f3, int rd, int op) {
     return (((uint32_t)f7&0x7F)<<25)|(((uint32_t)rs2&0x1F)<<20)|(((uint32_t)rs1&0x1F)<<15)|
@@ -188,9 +201,9 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
     else if (strcmp(mn,"xori")==0)  { int rd=RD,rs1=RS1; emit_word(a,enc_I((int)strtol(args[2],NULL,0),rs1,4,rd,0x13)); }
     else if (strcmp(mn,"ori")==0)   { int rd=RD,rs1=RS1; emit_word(a,enc_I((int)strtol(args[2],NULL,0),rs1,6,rd,0x13)); }
     else if (strcmp(mn,"andi")==0)  { int rd=RD,rs1=RS1; emit_word(a,enc_I((int)strtol(args[2],NULL,0),rs1,7,rd,0x13)); }
-    else if (strcmp(mn,"slli")==0)  { int rd=RD,rs1=RS1,sh=(int)strtol(args[2],NULL,0)&0x1F; emit_word(a,enc_R(0,sh,rs1,1,rd,0x13)); }
-    else if (strcmp(mn,"srli")==0)  { int rd=RD,rs1=RS1,sh=(int)strtol(args[2],NULL,0)&0x1F; emit_word(a,enc_R(0,sh,rs1,5,rd,0x13)); }
-    else if (strcmp(mn,"srai")==0)  { int rd=RD,rs1=RS1,sh=(int)strtol(args[2],NULL,0)&0x1F; emit_word(a,enc_R(0x20,sh,rs1,5,rd,0x13)); }
+    else if (strcmp(mn,"slli")==0)  { int rd=RD,rs1=RS1,sh=parse_shift_amount(a,args[2],line_num); emit_word(a,enc_R(0,sh,rs1,1,rd,0x13)); }
+    else if (strcmp(mn,"srli")==0)  { int rd=RD,rs1=RS1,sh=parse_shift_amount(a,args[2],line_num); emit_word(a,enc_R(0,sh,rs1,5,rd,0x13)); }
+    else if (strcmp(mn,"srai")==0)  { int rd=RD,rs1=RS1,sh=parse_shift_amount(a,args[2],line_num); emit_word(a,enc_R(0x20,sh,rs1,5,rd,0x13)); }
 
     /* ---------- LOAD ---------- */
     else if (strcmp(mn,"lw")==0||strcmp(mn,"lh")==0||strcmp(mn,"lb")==0||

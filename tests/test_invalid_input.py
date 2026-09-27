@@ -40,6 +40,24 @@ class InvalidInputTests(unittest.TestCase):
                 self.assertIn(b"[ERR]", result.stderr)
                 self.assertFalse(source.with_suffix(".o").exists())
 
+    def test_invalid_shift_amounts_fail_without_object_output(self):
+        for instruction in ["slli x1,x2,32", "srli x1,x2,-1", "srai x1,x2,1x"]:
+            with self.subTest(instruction=instruction), tempfile.TemporaryDirectory() as directory:
+                source = pathlib.Path(directory) / "program.s"
+                source.write_text(instruction + "\n")
+                result = subprocess.run([str(ASSEMBLER), str(source)], capture_output=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Kaydirma miktari".encode(), result.stderr)
+                self.assertFalse(source.with_suffix(".o").exists())
+
+    def test_shift_amount_31_is_valid(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = pathlib.Path(directory) / "program.s"
+            source.write_text("slli x1,x2,31\n")
+            result = subprocess.run([str(ASSEMBLER), str(source)], capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertTrue(source.with_suffix(".o").exists())
+
     def test_output_open_failure_is_not_success(self):
         with tempfile.TemporaryDirectory() as directory:
             source = pathlib.Path(directory) / "program.s"
