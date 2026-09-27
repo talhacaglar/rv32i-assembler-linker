@@ -58,6 +58,21 @@ class InvalidInputTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr.decode())
             self.assertTrue(source.with_suffix(".o").exists())
 
+    def test_malformed_memory_operands_fail_without_object_output(self):
+        for instruction in [
+            "lw x1,plain-label",
+            "lw x1,4(x2)junk",
+            "sw x3,2147483648(x2)",
+            "lw x1,4(x2",
+        ]:
+            with self.subTest(instruction=instruction), tempfile.TemporaryDirectory() as directory:
+                source = pathlib.Path(directory) / "program.s"
+                source.write_text(instruction + "\n")
+                result = subprocess.run([str(ASSEMBLER), str(source)], capture_output=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(b"[ERR]", result.stderr)
+                self.assertFalse(source.with_suffix(".o").exists())
+
     def test_output_open_failure_is_not_success(self):
         with tempfile.TemporaryDirectory() as directory:
             source = pathlib.Path(directory) / "program.s"

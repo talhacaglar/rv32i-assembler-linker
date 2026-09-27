@@ -209,8 +209,7 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
     else if (strcmp(mn,"lw")==0||strcmp(mn,"lh")==0||strcmp(mn,"lb")==0||
              strcmp(mn,"lhu")==0||strcmp(mn,"lbu")==0) {
         int rd=RD; int32_t imm; int rs1;
-        parse_mem_operand(args[1], &imm, &rs1);
-        if (rs1 < 0) a->error_count++;
+        if (parse_mem_operand(args[1], &imm, &rs1) < 0) { a->error_count++; return; }
         int f3 = strcmp(mn,"lw")==0?2:strcmp(mn,"lh")==0?1:strcmp(mn,"lb")==0?0:
                  strcmp(mn,"lhu")==0?5:4;
         emit_word(a, enc_I(imm,rs1,f3,rd,0x03));
@@ -218,8 +217,7 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
     /* ---------- STORE ---------- */
     else if (strcmp(mn,"sw")==0||strcmp(mn,"sh")==0||strcmp(mn,"sb")==0) {
         int rs2=RD; /* args[0] kaynak reg */ int32_t imm; int rs1;
-        parse_mem_operand(args[1], &imm, &rs1);
-        if (rs1 < 0) a->error_count++;
+        if (parse_mem_operand(args[1], &imm, &rs1) < 0) { a->error_count++; return; }
         int f3 = strcmp(mn,"sw")==0?2:strcmp(mn,"sh")==0?1:0;
         emit_word(a, enc_S(imm,rs2,rs1,f3,0x23));
     }

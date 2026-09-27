@@ -3,6 +3,8 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <limits.h>
 
 typedef struct { const char* name; int num; } RegEntry;
 
@@ -109,11 +111,33 @@ int parse_mem_operand(const char* s, int32_t* imm_out, int* rs1_out) {
     char tmp[MAX_NAME_LEN];
     copy_cstr(tmp, sizeof(tmp), s);
     char* p = strchr(tmp, '(');
-    if (!p) { *imm_out = 0; *rs1_out = 0; return 0; }
+    if (!p) goto invalid;
     *p = '\0';
     char* q = strchr(p+1, ')');
-    if (q) *q = '\0';
-    *imm_out = (int32_t)strtol(tmp, NULL, 0);
+    if (!q) goto invalid;
+    *q = '\0';
+    for (char* tail = q + 1; *tail; tail++)
+        if (*tail != ' ' && *tail != '\t') goto invalid;
+
+    char* imm = tmp;
+    while (*imm == ' ' || *imm == '\t') imm++;
+    char* imm_end = imm + strlen(imm);
+    while (imm_end > imm && (imm_end[-1] == ' ' || imm_end[-1] == '\t')) *--imm_end = '\0';
+    long value = 0;
+    if (*imm) {
+        errno = 0;
+        char* end = NULL;
+        value = strtol(imm, &end, 0);
+        if (errno == ERANGE || end == imm || *end != '\0' || value < INT32_MIN || value > INT32_MAX)
+            goto invalid;
+    }
     *rs1_out = parse_reg(p+1);
+    if (*rs1_out < 0) goto invalid;
+    *imm_out = (int32_t)value;
     return 1;
+
+invalid:
+    fprintf(stderr, "[ERR] Hatali bellek operandı: '%s'\n", s);
+    *rs1_out = -1;
+    return -1;
 }
