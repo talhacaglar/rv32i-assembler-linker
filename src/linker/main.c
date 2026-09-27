@@ -60,11 +60,14 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    int failed = 0;
     char path[512];
-    snprintf(path, sizeof(path), "%s.hex", output); linker_write_hex(l, path);
-    snprintf(path, sizeof(path), "%s.mem", output); linker_write_mem(l, path);
-    snprintf(path, sizeof(path), "%s.bin", output); linker_write_bin(l, path);
-    snprintf(path, sizeof(path), "%s.map", output); linker_write_map(l, path);
+    snprintf(path, sizeof(path), "%s.hex", output); if (linker_write_hex(l, path) != 0) failed = 1;
+    snprintf(path, sizeof(path), "%s.mem", output); if (linker_write_mem(l, path) != 0) failed = 1;
+    snprintf(path, sizeof(path), "%s.bin", output); if (linker_write_bin(l, path) != 0) failed = 1;
+    snprintf(path, sizeof(path), "%s.map", output); if (linker_write_map(l, path) != 0) failed = 1;
+
+    if (failed) { free(l); return 1; }
 
     printf("\n[LINK] Tamamlandi!\n");
     printf("  FPGA icin: %s.mem ($readmemh ile yukle)\n", output);

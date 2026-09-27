@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
-        obj_save_json(&asm_state.obj, out_path);
+        if (obj_save_json(&asm_state.obj, out_path) != 0) { failed = 1; continue; }
         printf("  -> %s\n\n", out_path);
     }
 

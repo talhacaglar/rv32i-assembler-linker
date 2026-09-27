@@ -99,6 +99,6 @@ typedef struct {
 /* Fonksiyon bildirimleri */
 void     asm_init(Assembler* a, const char* filename);
 int      asm_assemble_file(Assembler* a, const char* path);
-void     obj_save_json(ObjectFile* obj, const char* path);
+int      obj_save_json(ObjectFile* obj, const char* path);
 
 #endif /* ASSEMBLER_H */

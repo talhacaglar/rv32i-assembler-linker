@@ -1,5 +1,12 @@
 #include "linker.h"
 
+static int finish_output(FILE* f, const char* path) {
+    int failed = ferror(f);
+    if (fclose(f) != 0) failed = 1;
+    if (failed) fprintf(stderr, "[ERR] Cikti yazilamadi: %s\n", path);
+    return failed ? -1 : 0;
+}
+
 static void word_to_le(uint32_t w, uint8_t* out) {
     out[0] = (uint8_t)(w & 0xFF);
     out[1] = (uint8_t)((w >> 8) & 0xFF);
@@ -44,13 +51,13 @@ static void write_hex_segment(FILE* f, uint32_t addr, const uint8_t* data, int s
     }
 }
 
-void linker_write_hex(Linker* l, const char* path) {
+int linker_write_hex(Linker* l, const char* path) {
     FILE* f = fopen(path, "w");
-    if (!f) { fprintf(stderr, "[ERR] HEX dosyasi acilamadi: %s\n", path); return; }
+    if (!f) { fprintf(stderr, "[ERR] HEX dosyasi acilamadi: %s\n", path); return -1; }
 
     int text_size = l->final_text_count * 4;
     uint8_t* text_bytes = (uint8_t*)malloc(text_size > 0 ? (size_t)text_size : 1);
-    if (!text_bytes) { fclose(f); return; }
+    if (!text_bytes) { fclose(f); return -1; }
 
     for (int i = 0; i < l->final_text_count; i++) {
         word_to_le(l->final_text[i], text_bytes + i * 4);
@@ -63,15 +70,16 @@ void linker_write_hex(Linker* l, const char* path) {
     write_hex_record(f, 0, 0, 1, NULL);
 
     free(text_bytes);
-    fclose(f);
+    if (finish_output(f, path) != 0) return -1;
     printf("[LINK] HEX yazildi: %s (%d byte veri)\n",
            path, text_size + l->final_data_size);
+    return 0;
 }
 
 
-void linker_write_mem(Linker* l, const char* path) {
+int linker_write_mem(Linker* l, const char* path) {
     FILE* f = fopen(path, "w");
-    if (!f) { fprintf(stderr, "[ERR] MEM dosyasi acilamadi: %s\n", path); return; }
+    if (!f) { fprintf(stderr, "[ERR] MEM dosyasi acilamadi: %s\n", path); return -1; }
 
     fprintf(f, "// PicoRV32 BRAM Init\n");
     fprintf(f, "// TEXT: 0x%08x  DATA: 0x%08x\n\n", l->text_base, l->data_base);
@@ -96,8 +104,9 @@ void linker_write_mem(Linker* l, const char* path) {
         }
     }
 
-    fclose(f);
+    if (finish_output(f, path) != 0) return -1;
     printf("[LINK] MEM yazildi: %s\n", path);
+    return 0;
 }
 
 static int write_zeros(FILE* f, uint32_t count) {
@@ -110,9 +119,9 @@ static int write_zeros(FILE* f, uint32_t count) {
     return 1;
 }
 
-void linker_write_bin(Linker* l, const char* path) {
+int linker_write_bin(Linker* l, const char* path) {
     FILE* f = fopen(path, "wb");
-    if (!f) { fprintf(stderr, "[ERR] BIN dosyasi acilamadi: %s\n", path); return; }
+    if (!f) { fprintf(stderr, "[ERR] BIN dosyasi acilamadi: %s\n", path); return -1; }
 
     for (int i = 0; i < l->final_text_count; i++) {
         uint32_t w = l->final_text[i];
@@ -121,7 +130,7 @@ void linker_write_bin(Linker* l, const char* path) {
         if (fwrite(bytes, 1, sizeof(bytes), f) != sizeof(bytes)) {
             fclose(f);
             fprintf(stderr, "[ERR] BIN yazilamadi: %s\n", path);
-            return;
+            return -1;
         }
     }
 
@@ -133,7 +142,7 @@ void linker_write_bin(Linker* l, const char* path) {
         if (!write_zeros(f, gap)) {
             fclose(f);
             fprintf(stderr, "[ERR] BIN bosluk yazilamadi: %s\n", path);
-            return;
+            return -1;
         }
     } else if (l->final_data_size > 0 && l->data_base < text_end) {
         fprintf(stderr, "[WARN] DATA base TEXT ile ortusuyor; BIN data bolumu ardindan yazildi.\n");
@@ -143,18 +152,19 @@ void linker_write_bin(Linker* l, const char* path) {
         fwrite(l->final_data, 1, (size_t)l->final_data_size, f) != (size_t)l->final_data_size) {
         fclose(f);
         fprintf(stderr, "[ERR] BIN data yazilamadi: %s\n", path);
-        return;
+        return -1;
     }
-    fclose(f);
+    if (finish_output(f, path) != 0) return -1;
 
     uint32_t sz = text_size + gap + (uint32_t)l->final_data_size;
     printf("[LINK] BIN yazildi: %s (%u byte)\n", path, sz);
+    return 0;
 }
 
 
-void linker_write_map(Linker* l, const char* path) {
+int linker_write_map(Linker* l, const char* path) {
     FILE* f = fopen(path, "w");
-    if (!f) return;
+    if (!f) { fprintf(stderr, "[ERR] MAP dosyasi acilamadi: %s\n", path); return -1; }
 
     fprintf(f, "================================================================\n");
     fprintf(f, "  RV32I LINKER MAP - PicoRV32\n");
@@ -190,6 +200,7 @@ void linker_write_map(Linker* l, const char* path) {
     fprintf(f, "----------------------------------------------------------------\n");
     fprintf(f, "  _start = 0x%08x\n", entry != 0xFFFFFFFF ? entry : l->text_base);
 
-    fclose(f);
+    if (finish_output(f, path) != 0) return -1;
     printf("[LINK] MAP yazildi: %s\n", path);
+    return 0;
 }

@@ -447,9 +447,9 @@ void resolve_local_relocs(Assembler* a) {
 }
 
 
-void obj_save_json(ObjectFile* obj, const char* path) {
+int obj_save_json(ObjectFile* obj, const char* path) {
     FILE* f = fopen(path, "w");
-    if (!f) { fprintf(stderr, "[ERR] Dosya acilamadi: %s\n", path); return; }
+    if (!f) { fprintf(stderr, "[ERR] Dosya acilamadi: %s\n", path); return -1; }
 
     fprintf(f, "{\n");
     fprintf(f, "  \"filename\": \"%s\",\n", obj->filename);
@@ -502,5 +502,8 @@ void obj_save_json(ObjectFile* obj, const char* path) {
     }
     fprintf(f, "]\n}\n");
 
-    fclose(f);
+    int failed = ferror(f);
+    if (fclose(f) != 0) failed = 1;
+    if (failed) fprintf(stderr, "[ERR] Obje yazilamadi: %s\n", path);
+    return failed ? -1 : 0;
 }

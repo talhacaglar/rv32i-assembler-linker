@@ -93,10 +93,10 @@ void     linker_init(Linker* l, uint32_t text_base, uint32_t data_base, uint32_t
 int      linker_load_object(Linker* l, const char* path);
 void     linker_pass1(Linker* l);
 int      linker_pass2(Linker* l);
-void     linker_write_hex(Linker* l, const char* path);
-void     linker_write_mem(Linker* l, const char* path);
-void     linker_write_bin(Linker* l, const char* path);
-void     linker_write_map(Linker* l, const char* path);
+int      linker_write_hex(Linker* l, const char* path);
+int      linker_write_mem(Linker* l, const char* path);
+int      linker_write_bin(Linker* l, const char* path);
+int      linker_write_map(Linker* l, const char* path);
 
 extern const char* reloc_type_str[];
 void apply_reloc(uint32_t* text_words, int text_count, LReloc* r, uint32_t sym_addr, uint32_t instr_addr);
