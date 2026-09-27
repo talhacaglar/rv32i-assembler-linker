@@ -125,6 +125,8 @@ void assemble_instr(Assembler* a, const char* mn, char* args_str, int line_num) 
         {"bnez", 2, 2},
         {"blez", 2, 2},
         {"bgez", 2, 2},
+        {"bltz", 2, 2},
+        {"bgtz", 2, 2},
         {"j", 1, 1},
         {"call", 1, 1},
         {"ecall", 0, 0},

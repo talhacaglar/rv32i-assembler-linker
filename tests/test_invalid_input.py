@@ -21,3 +21,11 @@ class InvalidInputTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run([str(ASSEMBLER), str(pathlib.Path(directory) / "missing.s")], capture_output=True)
             self.assertNotEqual(result.returncode, 0)
+
+    def test_signed_zero_branch_pseudoinstructions_are_supported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = pathlib.Path(directory) / "program.s"
+            source.write_text("bltz x1,4\nbgtz x2,4\n")
+            result = subprocess.run([str(ASSEMBLER), str(source)], capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertTrue(source.with_suffix(".o").exists())
