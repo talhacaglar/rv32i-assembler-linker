@@ -3,6 +3,7 @@ import subprocess
 import glob
 import json
 import struct
+import sys
 
 DATA_BASE = 0x00010000
 
@@ -47,12 +48,12 @@ def run_tests():
     
     if not os.path.exists(assembler) or not os.path.exists(linker):
         print("[HATA] Derlenmis assembler_bin veya linker_bin bulunamadi. Lutfen 'make build' calistirin.")
-        return
+        return 1
 
     test_files = glob.glob("tests/test_programs/*.s")
     if not test_files:
         print("[HATA] Test dosyasi bulunamadi (tests/test_programs/*.s)")
-        return
+        return 1
 
     os.makedirs("output/tests", exist_ok=True)
     
@@ -85,6 +86,7 @@ def run_tests():
         success_count += 1
         
     print(f"\nSonuc: {success_count}/{total} test basarili.")
+    return 0 if success_count == total else 1
     
 if __name__ == '__main__':
-    run_tests()
+    sys.exit(run_tests())

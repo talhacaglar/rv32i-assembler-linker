@@ -33,6 +33,7 @@ build: all
 
 test: all
 	python3 tests/run_tests.py
+	python3 -m unittest discover -s tests -p 'test_*.py'
 
 clean:
 	rm -f assembler_bin linker_bin
